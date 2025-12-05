@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Digital Saathi</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; -webkit-tap-highlight-color: transparent; }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+        .snap-x { scroll-snap-type: x mandatory; }
+        .snap-start { scroll-snap-align: start; }
+        
+        /* Smooth Fade In Animation */
+        .fade-in { animation: fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Slide In Animation */
+        .slide-in-right { animation: slideInRight 0.3s ease-out; }
+        @keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 0px; background: transparent; }
+
+        /* Glassmorphism Utilities */
+        .glass { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-bottom: 1px solid rgba(255,255,255,0.6); }
+        .dark .glass { background: rgba(15, 23, 42, 0.9); border-bottom: 1px solid rgba(255,255,255,0.05); }
+
+        /* Hide scrollbar for clean horizontal scroll */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Quiz Selection Transition */
+        .quiz-opt { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .quiz-opt:active { transform: scale(0.98); }
+    </style>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        indigo: { 50: '#eef2ff', 100: '#e0e7ff', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca', 900: '#312e81' },
+                        slate: { 850: '#1e293b' } 
+                    },
+                    boxShadow: {
+                        'soft': '0 8px 30px -6px rgba(0,0,0,0.06)',
+                        'glow': '0 0 20px rgba(99, 102, 241, 0.2)',
+                        'inner-light': 'inset 0 2px 4px 0 rgba(255, 255, 255, 0.2)'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 transition-colors duration-300 min-h-screen flex flex-col selection:bg-indigo-100 selection:text-indigo-900">
+
+    <!-- Confetti Canvas -->
+    <canvas id="confetti" class="fixed inset-0 pointer-events-none z-50"></canvas>
+
+    <!-- Overlay Layer for Modals -->
+    <div id="overlay-layer" class="relative z-50"></div>
+
+    <!-- App Container -->
+    <div id="app" class="flex-grow flex flex-col w-full min-h-screen relative">
+        <!-- Content injected here -->
+    </div>
+
+    <script>
+        // --- 0. SUPABASE CONFIGURATION ---
+        const SUPABASE_CONFIG = {
+            url: "https://ngzcjpxgyhyolklmokje.supabase.co", 
+            key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5nemNqcHhneWh5b2xrbG1va2plIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQwODg4MjgsImV4cCI6MjA3OTY2NDgyOH0.K7FIGEZg4QcGUagwI_hN4_cz3I_jlCW1A5ShrRvhSG0",
+            enabled: true 
+        };
+
+        // --- 1. MOCK DATA ---
+        const mockStateDistrictData = {
+            "Andhra Pradesh": ["Anantapur", "Chittoor", "Guntur", "Krishna", "Visakhapatnam"],
+            "Bihar": ["Patna", "Gaya", "Muzaffarpur", "Bhagalpur", "Darbhanga", "Purnia"],
+            "Chhattisgarh": ["Raipur", "Bilaspur", "Durg"],
+            "Gujarat": ["Ahmedabad", "Surat", "Vadodara", "Rajkot", "Bhavnagar"],
+            "Haryana": ["Gurgaon", "Faridabad", "Panipat"],
+            "Jharkhand": ["Ranchi", "Dhanbad", "Jamshedpur", "Bokaro"],
+            "Karnataka": ["Bangalore", "Mysore", "Hubli", "Mangalore", "Belgaum"],
+            "Kerala": ["Thiruvananthapuram", "Kochi", "Kozhikode"],
+            "Madhya Pradesh": ["Bhopal", "Indore", "Gwalior", "Jabalpur", "Ujjain"],
+            "Maharashtra": ["Mumbai", "Pune", "Nagpur", "Nashik", "Aurangabad", "Thane"],
+            "Odisha": ["Bhubaneswar", "Cuttack", "Rourkela"],
+            "Punjab": ["Ludhiana", "Amritsar", "Jalandhar"],
+            "Rajasthan": ["Jaipur", "Udaipur", "Jodhpur", "Kota", "Ajmer", "Bikaner"],
+            "Tamil Nadu": ["Chennai", "Coimbatore", "Madurai", "Salem", "Trichy"],
+            "Telangana": ["Hyderabad", "Warangal", "Nizamabad"],
+            "Uttar Pradesh": ["Lucknow", "Kanpur", "Varanasi", "Agra", "Prayagraj", "Meerut", "Noida", "Ghaziabad"],
+            "Uttarakhand": ["Dehradun", "Haridwar", "Nainital"],
+            "West Bengal": ["Kolkata", "Howrah", "Darjeeling", "Siliguri"]
+        };
+
+        const mockLearningData = [
+          { id: 'payments', name: 'Digital Payments', icon: 'banknote', color: 'from-emerald-500 to-teal-600', topics: [
+              { id: 'upi_intro', name: 'UPI Setup', categoryId: 'payments', videoUrl: 'https://www.youtube.com/watch?v=vNpy78V7eTw', description: 'Register for UPI & link bank account.', simulation: true, quiz: [
+                  { question: "What is the full form of UPI?", options: ["Unified Payments Interface", "Union Pay India", "United Payment Interconnect", "Universal Pay ID"], answer: 0 },
+                  { question: "How many digits is a standard UPI PIN?", options: ["2 or 3", "4 or 6", "8", "10"], answer: 1 },
+                  { question: "Can you use UPI without internet?", options: ["No, never", "Yes, via *99# USSD", "Only on weekends", "Only for SBI"], answer: 1 },
+                  { question: "What should you NEVER share?", options: ["Your Name", "UPI ID", "UPI PIN", "QR Code"], answer: 2 },
+                  { question: "Is a bank account mandatory for UPI?", options: ["No", "Yes", "Maybe", "Only for merchants"], answer: 1 }
+              ]},
+              { id: 'wallet', name: 'Mobile Wallets', categoryId: 'payments', videoUrl: 'https://www.youtube.com/watch?v=8K71e3r-7fE', description: 'Using PayTM/PhonePe wallets.', simulation: false, quiz: [
+                  { question: "Do you need a bank account to USE wallet money?", options: ["Yes", "No", "Maybe", "Only for credit"], answer: 1 },
+                  { question: "Is KYC required for wallets?", options: ["Yes", "for full limits", "No, never", "Only for students", "Only for seniors"], answer: 0 },
+                  { question: "Can you withdraw cash from a wallet at an ATM?", options: ["Yes, always", "No, unless you have a specific card", "Only on Sundays", "Never"], answer: 1 },
+                  { question: "Wallet is linked to?", options: ["Email", "Mobile Number", "Home Address", "PAN only"], answer: 1 },
+                  { question: "If phone is lost, is wallet money safe?", options: ["No", "Yes, if app is locked/PIN protected", "Only if you call police", "Money disappears"], answer: 1 }
+              ]}
+          ]},
+          { id: 'communication', name: 'Communication', icon: 'message-circle', color: 'from-blue-500 to-indigo-600', topics: [
+              { id: 'whatsapp_basic', name: 'WhatsApp Basics', categoryId: 'communication', videoUrl: 'https://www.youtube.com/watch?v=N74hQ2Z_kCg', description: 'Sending messages, photos and voice notes.', simulation: true, quiz: [
+                  { question: "What is needed to use WhatsApp?", options: ["Only Phone", "Internet & Phone Number", "Email only", "Aadhar Card"], answer: 1 },
+                  { question: "What does one grey tick mean?", options: ["Message Sent", "Message Delivered", "Message Read", "Message Failed"], answer: 0 },
+                  { question: "Can you unsend a message?", options: ["No", "Yes, 'Delete for Everyone'", "Only within 1 second", "Only if blocked"], answer: 1 },
+                  { question: "Is WhatsApp Status public?", options: ["Yes, to whole world", "No, only to contacts (privacy settings)", "Only to Google", "Only to Admin"], answer: 1 },
+                  { question: "What is a Group?", options: ["A single chat", "Chat with multiple people", "A paid feature", "A virus"], answer: 1 }
+              ]},
+              { id: 'email_basic', name: 'Email Basics', categoryId: 'communication', videoUrl: 'https://www.youtube.com/watch?v=A6P6aN4cM_U', description: 'Creating an account and sending emails.', simulation: false, quiz: [
+                  { question: "What symbol is mandatory in email ID?", options: ["#", "@", "&", "$"], answer: 1 },
+                  { question: "Where do you write the main message?", options: ["Subject Line", "Body", "To", "CC"], answer: 1 },
+                  { question: "What is 'Spam'?", options: ["Important Mail", "Junk/Unwanted Mail", "Sent Mail", "Drafts"], answer: 1 },
+                  { question: "Can you send photos via email?", options: ["No", "Yes, as attachments", "Only text allowed", "Only links"], answer: 1 },
+                  { question: "Password should be?", options: ["123456", "Your Name", "Strong & Secret", "Shared with everyone"], answer: 2 }
+              ]}
+          ]},
+          { id: 'travel', name: 'Travel & Transport', icon: 'train', color: 'from-violet-500 to-purple-600', topics: [
+              { id: 'train_booking', name: 'Train Booking', categoryId: 'travel', videoUrl: 'https://www.youtube.com/watch?v=483_lCg2Y1o', description: 'Creating IRCTC account and booking tickets.', simulation: true, quiz: [
+                  { question: "App used for Train Booking?", options: ["Uber", "IRCTC Rail Connect", "Zomato", "Netflix"], answer: 1 },
+                  { question: "What is PNR?", options: ["Passenger Name Record", "Personal Number Rail", "Public Network Road", "Private Name Route"], answer: 0 },
+                  { question: "Do you need ID proof for travelling?", options: ["No", "Yes, original ID", "Only photo", "Only ticket"], answer: 1 },
+                  { question: "What is Tatkal?", options: ["Free Ticket", "Emergency/Last Minute Booking", "Cancelled Ticket", "VIP Seat"], answer: 1 },
+                  { question: "Can you cancel a ticket online?", options: ["No, only at station", "Yes, via app/website", "Only via agent", "Never"], answer: 1 }
+              ]},
+              { id: 'bus_booking', name: 'Bus Booking', categoryId: 'travel', videoUrl: 'https://www.youtube.com/embed/Y08J1Q-D6vQ', description: 'Using apps like RedBus to travel.', simulation: false, quiz: [
+                  { question: "Benefit of online bus booking?", options: ["More expensive", "Select exact seat", "Stand in line", "No confirmation"], answer: 1 },
+                  { question: "How receives the ticket?", options: ["Post Mail", "SMS/Email/App", "Newspaper", "Call"], answer: 1 },
+                  { question: "What is a 'Sleeper' bus?", options: ["Bus with beds", "Bus that is slow", "Bus for sleeping driver", "Bus with no seats"], answer: 0 },
+                  { question: "Can you track the bus location?", options: ["No", "Yes, mostly live tracking", "Only driver knows", "Only police knows"], answer: 1 },
+                  { question: "Is online payment safe?", options: ["No", "Yes, on trusted apps", "Never", "Only cash is safe"], answer: 1 }
+              ]}
+          ]},
+          { id: 'safety', name: 'Digital Safety', icon: 'lock', color: 'from-red-500 to-rose-600', topics: [
+              { id: 'otp', name: 'OTP Security', categoryId: 'safety', videoUrl: 'https://www.youtube.com/embed/H03Nq7y65Qk', description: 'Never share OTPs.', simulation: false, quiz: [
+                  { question: "What does OTP stand for?", options: ["One Time Password", "On Time Pay", "Only The Pin", "One Time Processing"], answer: 0 },
+                  { question: "Should you share OTP with bank staff?", options: ["Yes", "No, Never", "If they ask politely", "Only manager"], answer: 1 },
+                  { question: "OTP is valid for?", options: ["Forever", "A short time (mins)", "1 Day", "1 Week"], answer: 1 },
+                  { question: "If you receive an unexpected OTP, you should:", options: ["Ignore it or report", "Share it on Facebook", "Call the police immediately", "Delete your account"], answer: 0 },
+                  { question: "Is OTP required to RECEIVE money?", options: ["Yes", "No, never enter OTP to receive", "Maybe", "Always"], answer: 1 }
+              ]}
+          ]},
+          { id: 'govtschemes', name: 'Government Schemes', icon: 'handshake', color: 'from-orange-500 to-amber-600', topics: [
+              { id: 'pm_kisan', name: 'PM-KISAN', categoryId: 'govtschemes', videoUrl: 'https://www.youtube.com/embed/S_B2w2N785M', description: 'Guide for farmers.', simulation: true, quiz: [
+                  { question: "PM-KISAN is for?", options: ["Students", "Farmers", "Doctors", "Engineers"], answer: 1 },
+                  { question: "Amount given per year?", options: ["Rs 6000", "Rs 10000", "Rs 2000", "Rs 500"], answer: 0 },
+                  { question: "Key document required?", options: ["Passport", "Driving License", "Aadhaar Card", "School ID"], answer: 2 },
+                  { question: "Is e-KYC mandatory?", options: ["No", "Yes", "Maybe", "Only for new users"], answer: 1 },
+                  { question: "Official website suffix?", options: [".com", ".org", ".gov.in", ".net"], answer: 2 }
+              ]},
+              { id: 'digilocker', name: 'DigiLocker', categoryId: 'govtschemes', videoUrl: 'https://www.youtube.com/embed/Y08J1Q-D6vQ', description: 'Storing documents.', simulation: false, quiz: [
+                  { question: "Purpose of DigiLocker?", options: ["Shopping", "Storing digital documents", "Games", "Chat"], answer: 1 },
+                  { question: "Is DigiLocker document valid?", options: ["No", "Yes, as per IT Act", "Sometimes", "Only color print"], answer: 1 },
+                  { question: "Login requires?", options: ["Email", "Mobile/Aadhaar", "Pan Card", "Voter ID"], answer: 1 },
+                  { question: "Can you upload your own files?", options: ["No", "Yes, small files", "Only movies", "Only songs"], answer: 1 },
+                  { question: "Is it a private company app?", options: ["Yes", "No, Govt of India initiative", "No, US Govt", "No, Bank app"], answer: 1 }
+              ]}
+          ]},
+          { id: 'health', name: 'Health Services', icon: 'heart', color: 'from-pink-500 to-rose-600', topics: [
+            { id: 'ayushman', name: 'Ayushman Bharat', categoryId: 'health', videoUrl: 'https://www.youtube.com/embed/S_B2w2N785M', description: 'Health card eligibility.', simulation: false, quiz: [{ question: "Provides?", options: ["Loans", "Health Insurance", "Food", "Travel"], answer: 1 }, { question: "Target?", options: ["Rich", "Low Income", "Kids", "None"], answer: 1 }, { question: "Card name?", options: ["Golden Card", "Silver Card", "Ayushman Card", "Green Card"], answer: 2 }, { question: "Is it free?", options: ["Yes", "No", "Partially", "Only for govt employees"], answer: 0 }, { question: "Coverage?", options: ["1 Lakh", "2 Lakh", "5 Lakh", "10 Lakh"], answer: 2 }] },
+            { id: 'telemedicine', name: 'Telemedicine', categoryId: 'health', videoUrl: 'https://www.youtube.com/embed/Y08J1Q-D6vQ', description: 'Consult doctor online.', simulation: false, quiz: [{ question: "What is Telemedicine?", options: ["TV Show", "Online Doctor Consult", "Medicine Shop", "Game"], answer: 1 }, { question: "App used?", options: ["eSanjeevani", "TikTok", "PubG", "Ludo"], answer: 0 }, { question: "Need internet?", options: ["Yes", "No", "Maybe", "Only GPS"], answer: 0 }, { question: "Can get prescription?", options: ["No", "Yes", "Only advice", "Only verbal"], answer: 1 }, { question: "Is it safe?", options: ["No", "Yes, secure apps", "Never", "Only in city"], answer: 1 }] }
+          ]},
+          { id: 'online', name: 'Online Services', icon: 'clipboard-list', color: 'from-cyan-500 to-blue-600', topics: [
+            { id: 'job_search', name: 'Job Search', categoryId: 'online', videoUrl: 'https://www.youtube.com/embed/Y08J1Q-D6vQ', description: 'Find jobs online.', simulation: false, quiz: [{ question: "First step?", options: ["Travel", "Resume", "Bank", "Phone"], answer: 1 }, { question: "Pay for job?", options: ["Yes", "No", "Maybe", "Small fee"], answer: 1 }, { question: "Best site?", options: ["Naukri/LinkedIn", "Facebook", "Instagram", "WhatsApp"], answer: 0 }, { question: "Interview mode?", options: ["Only offline", "Online/Offline", "Only text", "Only call"], answer: 1 }, { question: "Is it free?", options: ["Mostly yes", "Always paid", "Never", "Only for govt"], answer: 0 }] },
+            { id: 'cert_apply', name: 'Apply Certificate', categoryId: 'online', videoUrl: 'https://www.youtube.com/embed/S_B2w2N785M', description: 'Apply for Caste/Income certificate.', simulation: false, quiz: [{ question: "Where to apply?", options: ["Police Station", "e-District Portal", "Post Office", "School"], answer: 1 }, { question: "Documents?", options: ["None", "Aadhaar/Ration Card", "Photo only", "Sign only"], answer: 1 }, { question: "Fees?", options: ["High", "Nominal/Free", "Lakhs", "Gold"], answer: 1 }, { question: "Track status?", options: ["No", "Yes, online", "Only by visiting", "Never"], answer: 1 }, { question: "Validity?", options: ["1 Day", "Varies (1-3 years)", "Forever", "1 Hour"], answer: 1 }] }
+          ]}
+        ];
+
+        const mockLearningDataHindi = [
+            { id: 'payments', name: 'डिजिटल भुगतान', icon: 'banknote', color: 'from-emerald-500 to-teal-600', topics: [
+                { id: 'upi_intro', name: 'UPI सेटअप', categoryId: 'payments', videoUrl: 'https://www.youtube.com/watch?v=m3-hO0iM6-A', description: 'UPI के लिए पंजीकरण करें और बैंक खाता लिंक करें।', simulation: true, quiz: [
+                    { question: "UPI का फुल फॉर्म क्या है?", options: ["यूनिफाइड पेमेंट्स इंटरफेस", "यूनियन पे इंडिया", "यूनाइटेड पेमेंट इंटरकनेक्ट", "यूनिवर्सल पे आईडी"], answer: 0 },
+                    { question: "मानक UPI पिन कितने अंकों का होता है?", options: ["2 या 3", "4 या 6", "8", "10"], answer: 1 },
+                    { question: "क्या आप बिना इंटरनेट के UPI का उपयोग कर सकते हैं?", options: ["नहीं, कभी नहीं", "हाँ, *99# यूएसएसडी के माध्यम से", "केवल सप्ताहांत पर", "केवल एसबीआई के लिए"], answer: 1 },
+                    { question: "आपको क्या कभी साझा नहीं करना चाहिए?", options: ["आपका नाम", "UPI आईडी", "UPI पिन", "क्यूआर कोड"], answer: 2 },
+                    { question: "क्या UPI के लिए बैंक खाता अनिवार्य है?", options: ["नहीं", "हाँ", "शायद", "केवल व्यापारियों के लिए"], answer: 1 }
+                ]},
+                { id: 'wallet', name: 'मोबाइल वॉलेट', categoryId: 'payments', videoUrl: 'https://www.youtube.com/embed/Y08J1Q-D6vQ', description: 'PayTM/PhonePe वॉलेट का उपयोग करना।', simulation: false, quiz: [
+                    { question: "क्या वॉलेट मनी का उपयोग करने के लिए बैंक खाते की आवश्यकता है?", options: ["हाँ", "नहीं", "शायद", "केवल क्रेडिट के लिए"], answer: 1 },
+                    { question: "क्या वॉलेट के लिए केवाईसी आवश्यक है?", options: ["हाँ, पूर्ण सीमा के लिए", "नहीं, कभी नहीं", "केवल छात्रों के लिए", "केवल वरिष्ठ नागरिकों के लिए"], answer: 0 },
+                    { question: "क्या आप एटीएम से वॉलेट से नकद निकाल सकते हैं?", options: ["हाँ, हमेशा", "नहीं, जब तक कि आपके पास कोई विशिष्ट कार्ड न हो", "केवल रविवार को", "कभी नहीं"], answer: 1 },
+                    { question: "वॉलेट किससे जुड़ा होता है?", options: ["ईमेल", "मोबाइल नंबर", "घर का पता", "केवल पैन"], answer: 1 },
+                    { question: "अगर फोन खो जाता है, तो क्या वॉलेट का पैसा सुरक्षित है?", options: ["नहीं", "हाँ, अगर ऐप लॉक/पिन सुरक्षित है", "केवल अगर आप पुलिस को बुलाते हैं", "पैसा गायब हो जाता है"], answer: 1 }
+                ]}
+            ]},
+            { id: 'communication', name: 'संचार', icon: 'message-circle', color: 'from-blue-500 to-indigo-600', topics: [
+                { id: 'whatsapp_basic', name: 'व्हाट्सएप मूल बातें', categoryId: 'communication', videoUrl: 'https://www.youtube.com/embed/Y08J1Q-D6vQ', description: 'संदेश, फोटो और वॉयस नोट्स भेजना।', simulation: true, quiz: [
+                    { question: "व्हाट्सएप का उपयोग करने के लिए क्या आवश्यक है?", options: ["केवल फोन", "इंटरनेट और फोन नंबर", "केवल ईमेल", "आधार कार्ड"], answer: 1 },
+                    { question: "एक ग्रे टिक का क्या मतलब है?", options: ["संदेश भेजा गया", "संदेश वितरित", "संदेश पढ़ा गया", "संदेश विफल"], answer: 0 },
+                    { question: "क्या आप संदेश को अनसेंड कर सकते हैं?", options: ["नहीं", "हाँ, 'सभी के लिए हटाएं'", "केवल 1 सेकंड के भीतर", "केवल अगर अवरुद्ध है"], answer: 1 },
+                    { question: "क्या व्हाट्सएप स्टेटस सार्वजनिक है?", options: ["हाँ, पूरी दुनिया के लिए", "नहीं, केवल संपर्कों के लिए (गोपनीयता सेटिंग)", "केवल Google के लिए", "केवल व्यवस्थापक के लिए"], answer: 1 },
+                    { question: "ग्रुप क्या है?", options: ["एकल चैट", "कई लोगों के साथ चैट", "एक सशुल्क सुविधा", "एक वायरस"], answer: 1 }
+                ]},
+                { id: 'email_basic', name: 'ईमेल मूल बातें', categoryId: 'communication', videoUrl: 'https://www.youtube.com/embed/S_B2w2N785M', description: 'खाता बनाना और ईमेल भेजना।', simulation: false, quiz: [
+                    { question: "ईमेल आईडी में कौन सा प्रतीक अनिवार्य है?", options: ["#", "@", "&", "$"], answer: 1 },
+                    { question: "आप मुख्य संदेश कहाँ लिखते हैं?", options: ["विषय पंक्ति", "बॉडी", "टू", "सीसी"], answer: 1 },
+                    { question: "स्पैम क्या है?", options: ["महत्वपूर्ण मेल", "जंक/अवांछित मेल", "भेजे गए मेल", "ड्राफ्ट"], answer: 1 },
+                    { question: "क्या आप ईमेल के माध्यम से फोटो भेज सकते हैं?", options: ["नहीं", "हाँ, अटैचमेंट के रूप में", "केवल टेक्स्ट की अनुमति है", "केवल लिंक"], answer: 1 },
+                    { question: "पासवर्ड कैसा होना चाहिए?", options: ["123456", "आपका नाम", "मजबूत और गुप्त", "सभी के साथ साझा किया गया"], answer: 2 }
+                ]}
+            ]},
+            { id: 'travel', name: 'यात्रा और परिवहन', icon: 'train', color: 'from-violet-500 to-purple-600', topics: [
+                { id: 'train_booking', name: 'ट्रेन बुकिंग (IRCTC)', categoryId: 'travel', videoUrl: 'https://www.youtube.com/embed/S_B2w2N785M', description: 'IRCTC खाता बनाना और टिकट बुक करना।', simulation: true, quiz: [
+                    { question: "ट्रेन बुकिंग के लिए उपयोग किया जाने वाला ऐप?", options: ["Uber", "IRCTC रेल कनेक्ट", "Zomato", "Netflix"], answer: 1 },
+                    { question: "PNR क्या है?", options: ["यात्री नाम रिकॉर्ड", "व्यक्तिगत नंबर रेल", "पब्लिक नेटवर्क रोड", "निजी नाम मार्ग"], answer: 0 },
+                    { question: "क्या यात्रा के लिए आईडी प्रमाण की आवश्यकता है?", options: ["नहीं", "हाँ, मूल आईडी", "केवल फोटो", "केवल टिकट"], answer: 1 },
+                    { question: "तत्काल क्या है?", options: ["मुफ्त टिकट", "आपातकालीन/अंतिम समय की बुकिंग", "रद्द टिकट", "वीआईपी सीट"], answer: 1 },
+                    { question: "क्या आप ऑनलाइन टिकट रद्द कर सकते हैं?", options: ["नहीं, केवल स्टेशन पर", "हाँ, ऐप/वेबसाइट के माध्यम से", "केवल एजेंट के माध्यम से", "कभी नहीं"], answer: 1 }
+                ]},
+                { id: 'bus_booking', name: 'बस बुकिंग', categoryId: 'travel', videoUrl: 'https://www.youtube.com/embed/Y08J1Q-D6vQ', description: 'Using apps like RedBus to travel.', simulation: false, quiz: [
+                    { question: "ऑनलाइन बस बुकिंग का लाभ?", options: ["अधिक महंगा", "सटीक सीट चुनें", "लाइन में खड़े रहें", "कोई पुष्टि नहीं"], answer: 1 },
+                    { question: "टिकट कैसे प्राप्त होता है?", options: ["पोस्ट मेल", "एसएमएस/ईमेल/ऐप", "अखबार", "कॉल"], answer: 1 },
+                    { question: "'स्लीपर' बस क्या है?", options: ["बिस्तरों वाली बस", "धीमी बस", "सोने वाले ड्राइवर के लिए बस", "बिना सीटों वाली बस"], answer: 0 },
+                    { question: "क्या आप बस की लोकेशन ट्रैक कर सकते हैं?", options: ["नहीं", "हाँ, अधिकतर लाइव ट्रैकिंग", "केवल ड्राइवर जानता है", "केवल पुलिस जानती है"], answer: 1 },
+                    { question: "क्या ऑनलाइन भुगतान सुरक्षित है?", options: ["नहीं", "हाँ, विश्वसनीय ऐप्स पर", "कभी नहीं", "केवल नकद सुरक्षित है"], answer: 1 }
+                ]}
+            ]},
+            { id: 'safety', name: 'डिजिटल सुरक्षा', icon: 'lock', color: 'from-red-500 to-rose-600', topics: [
+                { id: 'otp', name: 'ओटीपी सुरक्षा', categoryId: 'safety', videoUrl: 'https://www.youtube.com/embed/H03Nq7y65Qk', description: 'ओटीपी कभी साझा न करें।', simulation: false, quiz: [
+                    { question: "OTP का मतलब क्या है?", options: ["वन टाइम पासवर्ड", "ऑन टाइम पे", "ओनली द पिन", "वन टाइम प्रोसेसिंग"], answer: 0 },
+                    { question: "क्या आपको बैंक कर्मचारियों के साथ ओटीपी साझा करना चाहिए?", options: ["हाँ", "नहीं, कभी नहीं", "अगर वे विनम्रता से पूछें", "केवल प्रबंधक"], answer: 1 },
+                    { question: "OTP is valid for?", options: ["हमेशा के लिए", "कम समय (मिनट)", "1 दिन", "1 सप्ताह"], answer: 1 },
+                    { question: "यदि आपको कोई अप्रत्याशित ओटीपी मिलता है, तो आपको क्या करना चाहिए?", options: ["इसे अनदेखा करें या रिपोर्ट करें", "इसे फेसबुक पर साझा करें", "तुरंत पुलिस को बुलाएं", "अपना खाता हटाएं"], answer: 0 },
+                    { question: "क्या पैसे प्राप्त करने के लिए ओटीपी की आवश्यकता है?", options: ["हाँ", "नहीं, प्राप्त करने के लिए कभी ओटीपी दर्ज न करें", "शायद", "हमेशा"], answer: 1 }
+                ]}
+            ]},
+            { id: 'govtschemes', name: 'सरकारी योजनाएं', icon: 'handshake', color: 'from-orange-500 to-amber-600', topics: [
+                { id: 'pm_kisan', name: 'पीएम-किसान', categoryId: 'govtschemes', videoUrl: 'https://www.youtube.com/embed/S_B2w2N785M', description: 'किसानों के लिए गाइड।', simulation: true, quiz: [
+                    { question: "पीएम-किसान किसके लिए है?", options: ["छात्र", "किसान", "डॉक्टर", "इंजीनियर"], answer: 1 },
+                    { question: "प्रति वर्ष दी जाने वाली राशि?", options: ["6000 रुपये", "10000 रुपये", "2000 रुपये", "500 रुपये"], answer: 0 },
+                    { question: "मुख्य दस्तावेज की आवश्यकता?", options: ["पासपोर्ट", "ड्राइविंग लाइसेंस", "आधार कार्ड", "स्कूल आईडी"], answer: 2 },
+                    { question: "Is e-KYC mandatory?", options: ["No", "Yes", "Maybe", "Only for new users"], answer: 1 },
+                    { question: "आधिकारिक वेबसाइट प्रत्यय?", options: [".com", ".org", ".gov.in", ".net"], answer: 2 }
+                ]},
+                { id: 'digilocker', name: 'डिजिलॉकर', categoryId: 'govtschemes', videoUrl: 'https://www.youtube.com/embed/Y08J1Q-D6vQ', description: 'दस्तावेजों को सुरक्षित रखना।', simulation: false, quiz: [
+                    { question: "डिजिलॉकर का उद्देश्य?", options: ["खरीदारी", "डिजिटल दस्तावेज स्टोर करना", "खेल", "चैट"], answer: 1 },
+                    { question: "Is DigiLocker document valid?", options: ["No", "Yes, as per IT Act", "Sometimes", "Only color print"], answer: 1 },
+                    { question: "Login requires?", options: ["Email", "Mobile/Aadhaar", "Pan Card", "Voter ID"], answer: 1 },
+                    { question: "Can you upload your own files?", options: ["No", "Yes, small files", "Only movies", "Only songs"], answer: 1 },
+                    { question: "Is it a private company app?", options: ["Yes", "No, Govt of India initiative", "No, US Govt", "No, Bank app"], answer: 1 }
+                ]}
+            ]},
+            { id: 'health', name: 'स्वास्थ्य सेवाएं', icon: 'heart', color: 'from-pink-500 to-rose-600', topics: [
+              { id: 'ayushman', name: 'आयुष्मान भारत', categoryId: 'health', videoUrl: 'https://www.youtube.com/embed/S_B2w2N785M', description: 'स्वास्थ्य कार्ड पात्रता।', simulation: false, quiz: [{ question: "प्रदान करता है?", options: ["ऋण", "स्वास्थ्य बीमा", "भोजन", "यात्रा"], answer: 1 }, { question: "लक्ष्य?", options: ["अमीर", "कम आय", "बच्चे", "कोई नहीं"], answer: 1 }, { question: "कार्ड का नाम?", options: ["गोल्डन कार्ड", "सिल्वर कार्ड", "आयुष्मान कार्ड", "ग्रीन कार्ड"], answer: 2 }, { question: "क्या यह मुफ़्त है?", options: ["हाँ", "नहीं", "आंशिक रूप से", "केवल सरकारी कर्मचारियों के लिए"], answer: 0 }, { question: "कवरेज?", options: ["1 लाख", "2 लाख", "5 लाख", "10 लाख"], answer: 2 }] },
+              { id: 'telemedicine', name: 'टेलीमेडिसिन', categoryId: 'health', videoUrl: 'https://www.youtube.com/embed/Y08J1Q-D6vQ', description: 'ऑनलाइन डॉक्टर से परामर्श करें।', simulation: false, quiz: [{ question: "टेलीमेडिसिन क्या है?", options: ["टीवी शो", "ऑनलाइन डॉक्टर परामर्श", "दवा की दुकान", "खेल"], answer: 1 }, { question: "उपयोग किया गया ऐप?", options: ["ई-संजीवनी", "टिकटॉक", "पबजी", "लूडो"], answer: 0 }, { question: "इंटरनेट की आवश्यकता है?", options: ["हाँ", "नहीं", "शायद", "केवल जीपीएस"], answer: 0 }, { question: "प्रिस्क्रिप्शन मिल सकता है?", options: ["नहीं", "हाँ", "केवल सलाह", "केवल मौखिक"], answer: 1 }, { question: "क्या यह सुरक्षित है?", options: ["नहीं", "हाँ, सुरक्षित ऐप्स", "कभी नहीं", "केवल शहर में"], answer: 1 }] }
+            ]},
+            { id: 'online', name: 'ऑनलाइन सेवाएं', icon: 'clipboard-list', color: 'from-cyan-500 to-blue-600', topics: [
+              { id: 'job_search', name: 'नौकरी खोज', categoryId: 'online', videoUrl: 'https://www.youtube.com/embed/Y08J1Q-D6vQ', description: 'ऑनलाइन नौकरियां खोजें।', simulation: false, quiz: [{ question: "पहला कदम?", options: ["यात्रा", "बायोडाटा", "बैंक", "फोन"], answer: 1 }, { question: "नौकरी के लिए भुगतान?", options: ["हाँ", "नहीं", "शायद", "छोटा शुल्क"], answer: 1 }, { question: "सबसे अच्छी साइट?", options: ["नौकरी/लिंक्डइन", "फेसबुक", "इंस्टाग्राम", "व्हाट्सएप"], answer: 0 }, { question: "साक्षात्कार मोड?", options: ["केवल ऑफ़लाइन", "ऑनलाइन/ऑफ़लाइन", "केवल टेक्स्ट", "केवल कॉल"], answer: 1 }, { question: "क्या यह मुफ़्त है?", options: ["ज्यादातर हाँ", "हमेशा भुगतान किया", "कभी नहीं", "केवल सरकार के लिए"], answer: 0 }] },
+              { id: 'cert_apply', name: 'प्रमाण पत्र आवेदन', categoryId: 'online', videoUrl: 'https://www.youtube.com/embed/S_B2w2N785M', description: 'जाति/आय प्रमाण पत्र के लिए आवेदन करें।', simulation: false, quiz: [{ question: "कहाँ आवेदन करें?", options: ["पुलिस स्टेशन", "ई-जिला पोर्टल", "डाकघर", "स्कूल"], answer: 1 }, { question: "दस्तावेज़?", options: ["कोई नहीं", "आधार/राशन कार्ड", "केवल फोटो", "केवल हस्ताक्षर"], answer: 1 }, { question: "शुल्क?", options: ["उच्च", "नाममात्र/मुफ़्त", "लाखों", "सोना"], answer: 1 }, { question: "स्थिति ट्रैक करें?", options: ["नहीं", "हाँ, ऑनलाइन", "केवल जाकर", "कभी नहीं"], answer: 1 }, { question: " वैधता?", options: ["1 दिन", "भिन्न होता है (1-3 वर्ष)", "हमेशा के लिए", "1 घंटा"], answer: 1 }] }
+            ]}
+        ];
+
+        // --- 2. UTILS ---
+        const OFFLINE_KEY = "ds_offline_";
+
+        const Utils = {
+            getLocalItem: (key) => {
+                try {
+                    const item = localStorage.getItem(OFFLINE_KEY + key);
+                    return item ? JSON.parse(item) : null;
+                } catch (e) { return null; }
+            },
+            setLocalItem: (key, value) => {
+                try { localStorage.setItem(OFFLINE_KEY + key, JSON.stringify(value)); } catch (e) {}
+            },
+            generateUUID: () => {
+                if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+                return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                    var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+                    return v.toString(16);
+                });
+            },
+            generateStudentId: () => {
+                const year = new Date().getFullYear();
+                const random = Math.floor(1000 + Math.random() * 9000);
+                return `DS-${year}-${random}`;
+            },
+            calculateLearningMinutes: (progress) => {
+                if(!progress) return 0;
+                const completedCount = Object.values(progress).filter(p => p.isCompleted).length;
+                const totalAttempts = Object.values(progress).reduce((acc, curr) => acc + (curr.attempts || 0), 0);
+                return (completedCount * 15) + (totalAttempts * 5);
+            },
+            getEmbedUrl: (url) => {
+                if (!url) return '';
+                try {
+                    if (url.includes('/embed/')) return url;
+                    let videoId = '';
+                    if (url.includes('v=')) videoId = new URLSearchParams(url.split('?')[1]).get('v');
+                    else if (url.includes('youtu.be/')) videoId = url.split('youtu.be/')[1]?.split('?')[0];
+                    if (videoId) return `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1&playsinline=1`;
+                    return url;
+                } catch (e) { return url; }
+            },
+            resolveAuthEmail: (input) => {
+                if (input.includes('@')) return input;
+                return `${input.replace(/\D/g, '')}@digitalsaathi.local`;
+            },
+            fireConfetti: () => {
+                const canvas = document.getElementById('confetti');
+                const ctx = canvas.getContext('2d');
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+                
+                let particles = [];
+                for(let i=0; i<100; i++) {
+                    particles.push({
+                        x: window.innerWidth/2,
+                        y: window.innerHeight/2,
+                        vx: (Math.random() - 0.5) * 10,
+                        vy: (Math.random() - 0.5) * 10,
+                        color: `hsl(${Math.random()*360}, 100%, 50%)`,
+                        size: Math.random() * 5 + 2
+                    });
+                }
+                
+                function draw() {
+                    ctx.clearRect(0,0,canvas.width,canvas.height);
+                    particles.forEach((p, i) => {
+                        p.x += p.vx;
+                        p.y += p.vy;
+                        p.vy += 0.1; // gravity
+                        ctx.fillStyle = p.color;
+                        ctx.beginPath();
+                        ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+                        ctx.fill();
+                    });
+                    particles = particles.filter(p => p.y < window.innerHeight);
+                    if(particles.length > 0) requestAnimationFrame(draw);
+                    else ctx.clearRect(0,0,canvas.width,canvas.height);
+                }
+                draw();
+            }
+        };
+
+        // --- 3. API CLIENT ---
+        const isMockMode = () => !SUPABASE_CONFIG.enabled || SUPABASE_CONFIG.url.includes("your-project-id");
+
+        const API = {
+            login: async (identifier, password) => {
+                if (isMockMode()) return { user: { id: Utils.generateUUID() }, session: { access_token: `mock-token-${Date.now()}` } };
+                const email = Utils.resolveAuthEmail(identifier);
+                const url = `${SUPABASE_CONFIG.url}/auth/v1/token?grant_type=password`;
+                const headers = { 'apikey': SUPABASE_CONFIG.key, 'Content-Type': 'application/json' };
+                try {
+                    const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify({ email, password }) });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error_description || data.msg || "Login failed.");
+                    return { user: data.user, session: data };
+                } catch (e) { return { error: e.message }; }
+            },
+            register: async (mobile, password, email) => {
+                if (isMockMode()) return { user: { id: Utils.generateUUID() }, session: { access_token: `mock-token-${Date.now()}` } };
+                const authEmail = Utils.resolveAuthEmail(mobile);
+                const url = `${SUPABASE_CONFIG.url}/auth/v1/signup`;
+                const headers = { 'apikey': SUPABASE_CONFIG.key, 'Content-Type': 'application/json' };
+                try {
+                    const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify({ email: authEmail, password, data: { real_email: email } }) });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.msg || data.error_description || "Registration failed");
+                    return { user: data.user, session: data.session || (data.access_token ? data : null) };
+                } catch (e) { return { error: e.message }; }
+            },
+            request: async (table, method, body, queryParams = '', token = null) => {
+                if (isMockMode()) return { error: 'Mock Mode' };
+                // Allow guest fetch for public data like notifications
+                const isGuestFetch = !token && (table === 'notifications' || table === 'faq');
+                if (!token && !isGuestFetch) return { error: 'Local Token Missing' };
+
+                const headers = { 
+                    'apikey': SUPABASE_CONFIG.key, 
+                    'Content-Type': 'application/json', 
+                    'Prefer': 'resolution=merge-duplicates' 
+                };
+                
+                if (token) headers['Authorization'] = `Bearer ${token}`;
+
+                try {
+                    const url = `${SUPABASE_CONFIG.url}/rest/v1/${table}${queryParams}`;
+                    const response = await fetch(url, { method, headers, body: body ? JSON.stringify(body) : undefined });
+                    if (!response.ok) return { error: await response.text() };
+                    if (method === 'GET') return await response.json();
+                    return { error: null };
+                } catch (e) { return { error: e.message }; }
+            },
+            syncProfile: async (profile, token) => {
+                const row = { id: profile.uid, student_id: profile.studentId, full_name: profile.name, mobile: profile.mobile, email: profile.email, dob: profile.dob || null, state: profile.state || null, district: profile.district || null, village: profile.village || null, is_registered: profile.isRegistered, updated_at: new Date().toISOString() };
+                await API.request('profiles', 'POST', row, '?on_conflict=id', token);
+            },
+            pushProgress: async (userId, progressData, token) => {
+                const updates = Object.entries(progressData).map(([topicId, stats]) => ({ user_id: userId, topic_id: topicId, category_id: stats.categoryId || 'general', attempts: stats.attempts, highest_score: stats.highestScore, last_score: stats.lastScore || 0, is_completed: stats.isCompleted, last_attempt: stats.lastAttempt, updated_at: new Date().toISOString() }));
+                if (updates.length === 0) return;
+                await API.request('user_progress', 'POST', updates, '?on_conflict=user_id,topic_id', token);
+            },
+            fetchUserData: async (userId, token) => {
+                if (!token || token.startsWith('mock-')) return null;
+                try {
+                    const profiles = await API.request('profiles', 'GET', null, `?id=eq.${userId}&select=*`, token);
+                    let fetchedProfile = null;
+                    if (Array.isArray(profiles) && profiles.length > 0) {
+                        const p = profiles[0];
+                        fetchedProfile = { 
+                            uid: p.id, 
+                            studentId: p.student_id, 
+                            name: p.full_name, 
+                            mobile: p.mobile, 
+                            email: p.email, 
+                            dob: p.dob, 
+                            state: p.state, 
+                            district: p.district, 
+                            village: p.village, 
+                            isRegistered: p.is_registered 
+                        };
+                    }
+                    const progressRows = await API.request('user_progress', 'GET', null, `?user_id=eq.${userId}&select=*`, token);
+                    let fetchedProgress = {};
+                    if (Array.isArray(progressRows)) {
+                        progressRows.forEach(row => { fetchedProgress[row.topic_id] = { attempts: row.attempts, highestScore: row.highest_score, lastScore: row.last_score, isCompleted: row.is_completed, lastAttempt: row.last_attempt, categoryId: row.category_id }; });
+                    }
+                    return { profile: fetchedProfile, progress: fetchedProgress };
+                } catch (e) { return null; }
+            },
+            fetchNotifications: async () => {
+                try {
+                    const data = await API.request('notifications', 'GET', null, '?select=*&order=created_at.desc&limit=5');
+                    if (data && !data.error && Array.isArray(data)) {
+                        return data.map(n => ({
+                            id: n.id,
+                            title: n.title,
+                            message: n.message || n.body,
+                            type: n.type || 'info',
+                            time: new Date(n.created_at).toLocaleDateString(),
+                            read: false
+                        }));
+                    }
+                    return [];
+                } catch(e) { console.error(e); return []; }
+            }
+        };
+
+        const localizedText = {
+            en: {
+                appTitle: "Digital Saathi", navHome: "Home", navExplore: "Explore", navProgress: "Profile", navHelp: "Support",
+                welcomeTitle: "Welcome, {{name}}!", welcomeBody: "Start your digital journey today.",
+                loginTitle: "Login to Save Progress", registerTitle: "Create Account", loginBtn: "Login", registerBtn: "Register",
+                mobileLabel: "Mobile Number", passwordLabel: "Password", modules: "Modules", continueLearning: "Continue Learning",
+                resume: "Resume", startLearn: "Start Learning", review: "Review", backToTopic: "Back to Topic",
+                quiz: { assessment: "Assessment", question: "Question", next: "Next", submit: "Submit Answer", previous: "Prev", score: "Score: {{score}}%", passed: "Module Completed!", failed: "Try Again", reattempt: "Re-attempt Quiz" },
+                profile: { title: "My Profile", performance: "Performance Summary", modulesCompleted: "Modules Completed", attempts: "Attempts", streak: "Day Streak", logout: "Logout" },
+                support: { title: "Support Center", body: "We are here to help.", faq: "Frequently Asked Questions", faqTitle: "FAQs" },
+                learningData: mockLearningData,
+                rural: { state: "State", district: "District", village: "Village Name", dob: "Date of Birth" },
+                notifications: { title: "Notifications", empty: "No new notifications" },
+                guestPrompt: "Please login to access quizzes and save your certificate."
+            },
+            hi: {
+                appTitle: "डिजिटल साथी", navHome: "होम", navExplore: "एक्सप्लोर", navProgress: "प्रोफाइल", navHelp: "सहायता",
+                welcomeTitle: "नमस्ते, {{name}}!", welcomeBody: "आज ही अपनी डिजिटल यात्रा शुरू करें।",
+                loginTitle: "प्रगति सहेजने के लिए लॉगिन करें", registerTitle: "खाता बनाएं", loginBtn: "लॉगिन करें", registerBtn: "रजिस्टर करें",
+                mobileLabel: "मोबाइल नंबर", passwordLabel: "पासवर्ड", modules: "मॉड्यूल", continueLearning: "सीखना जारी रखें",
+                resume: "फिर से शुरू करें", startLearn: "सीखना शुरू करें", review: "समीक्षा करें", backToTopic: "वापस जाएं",
+                quiz: { assessment: "मूल्यांकन", question: "प्रश्न", next: "अगला", submit: "जमा करें", previous: "पिछला", score: "स्कोर: {{score}}%", passed: "मॉड्यूल पूरा हुआ!", failed: "पुनः प्रयास करें", reattempt: "पुनः प्रयास" },
+                profile: { title: "मेरी प्रोफाइल", performance: "प्रदर्शन सारांश", modulesCompleted: "पूर्ण मॉड्यूल", attempts: "प्रयास", streak: "दिन की स्ट्रीक", logout: "लॉग आउट" },
+                support: { title: "सहायता केंद्र", body: "हम आपकी मदद के लिए यहाँ हैं।", faq: "अक्सर पूछे जाने वाले प्रश्न", faqTitle: "सामान्य प्रश्न" },
+                learningData: mockLearningDataHindi,
+                rural: { state: "राज्य", district: "जिला", village: "गाँव का नाम", dob: "जन्म तिथि" },
+                notifications: { title: "सूचनाएं", empty: "कोई नई सूचना नहीं" },
+                guestPrompt: "क्विज़ तक पहुँचने और अपना प्रमाण पत्र सहेजने के लिए कृपया लॉगिन करें।"
+            }
+        };
+
+        const FAQ_DATA = [
+            { q: "How do I reset my password?", a: "Currently, you can request a password reset via the 'Forgot Password' link on the login page. An OTP will be sent to your registered mobile." },
+            { q: "Is this course free?", a: "Yes, Digital Saathi is a completely free initiative to help citizens learn digital skills." },
+            { q: "Can I use this offline?", a: "Some features require internet, but we cache your progress so you can sync when you are back online." },
+            { q: "How do I get a certificate?", a: "Complete all modules in a category with a score of 60% or higher to earn a certificate." }
+        ];
+
+        // --- 4. STATE MANAGEMENT (Vanilla "Store") ---
+        const Store = {
+            state: {
+                user: Utils.getLocalItem('user_id') || 'guest',
+                profile: Utils.getLocalItem('user_profile') || { name: 'Guest', isRegistered: false },
+                progress: Utils.getLocalItem(`progress_${Utils.getLocalItem('user_id')}`) || {},
+                token: Utils.getLocalItem('session_token'),
+                language: Utils.getLocalItem('language') || 'hi',
+                darkMode: Utils.getLocalItem('dark_mode') ?? window.matchMedia('(prefers-color-scheme: dark)').matches,
+                page: 'home', 
+                selectedCategoryId: null,
+                selectedTopicId: null,
+                authMode: 'login', 
+                authLoading: false,
+                authError: '',
+                regState: '', 
+                authRedirectTopic: null, 
+                quizIndex: 0,
+                quizAnswers: [],
+                quizResult: null,
+                showNotifications: false,
+                notifications: [],
+                fontScale: 1
+            },
+            listeners: [],
+            subscribe(fn) { this.listeners.push(fn); },
+            notify() { this.listeners.forEach(fn => fn(this.state)); },
+            update(newState) {
+                this.state = { ...this.state, ...newState };
+                if (newState.user !== undefined) Utils.setLocalItem('user_id', newState.user);
+                if (newState.profile !== undefined) Utils.setLocalItem('user_profile', newState.profile);
+                if (newState.progress !== undefined) Utils.setLocalItem(`progress_${this.state.user}`, newState.progress);
+                if (newState.token !== undefined) Utils.setLocalItem('session_token', newState.token);
+                if (newState.language !== undefined) Utils.setLocalItem('language', newState.language);
+                if (newState.darkMode !== undefined) {
+                    Utils.setLocalItem('dark_mode', newState.darkMode);
+                    document.documentElement.classList.toggle('dark', newState.darkMode);
+                }
+                this.notify();
+            },
+            async init() {
+                const notifs = await API.fetchNotifications();
+                if (notifs.length > 0) this.update({ notifications: notifs });
+                else {
+                    this.update({ notifications: [{ id: 1, title: "Welcome!", message: "Explore our new modules.", type: "info", time: "Just now", read: false }]});
+                }
+            },
+            async login(mobile, password) {
+                Store.update({ authLoading: true, authError: '' });
+                const { user, session, error } = await API.login(mobile, password);
+                if (error) {
+                    Store.update({ authLoading: false, authError: error });
+                } else {
+                    const data = await API.fetchUserData(user.id, session.access_token);
+                    const profile = data && data.profile ? data.profile : { uid: user.id, name: mobile, isRegistered: true, studentId: Utils.generateStudentId() };
+                    const progress = data && data.progress ? data.progress : {};
+                    const nextPage = this.state.authRedirectTopic ? 'topic' : 'home';
+                    const nextTopic = this.state.authRedirectTopic ? this.state.authRedirectTopic : null;
+                    Store.update({ user: user.id, token: session.access_token, profile, progress, authLoading: false, page: nextPage, selectedTopicId: nextTopic, authRedirectTopic: null });
+                }
+            },
+            async register(formData) {
+                Store.update({ authLoading: true, authError: '' });
+                const { user, session, error } = await API.register(formData.get('mobile'), formData.get('password'), formData.get('email'));
+                if(error) {
+                    Store.update({ authLoading: false, authError: error });
+                } else {
+                    if (session) {
+                        const profile = { uid: user.id, studentId: Utils.generateStudentId(), name: formData.get('name'), mobile: formData.get('mobile'), email: formData.get('email'), isRegistered: true, state: formData.get('state'), district: formData.get('district'), village: formData.get('village'), dob: formData.get('dob') };
+                        Store.update({ user: user.id, token: session.access_token, profile, authLoading: false, page: 'home' });
+                        await API.syncProfile(profile, session.access_token);
+                    } else { Store.update({ authLoading: false, authError: "Check email for confirmation link." }); }
+                }
+            },
+            guestLogin() { Store.update({ page: 'home', authError: '' }); },
+            logout() {
+                localStorage.clear();
+                this.update({ user: 'guest', token: null, profile: { name: 'Guest', isRegistered: false }, progress: {}, page: 'home' });
+            },
+            updateProgress(topicId, score, isCompleted, categoryId) {
+                const prev = this.state.progress[topicId] || {};
+                const newStats = { attempts: (prev.attempts || 0) + 1, highestScore: Math.max(prev.highestScore || 0, score), lastScore: score, isCompleted: isCompleted || prev.isCompleted, lastAttempt: new Date().toISOString(), categoryId: categoryId };
+                const newProgress = { ...this.state.progress, [topicId]: newStats };
+                Store.update({ progress: newProgress });
+                if (this.state.token && this.state.profile.isRegistered) { API.pushProgress(this.state.user, { [topicId]: newStats }, this.state.token); }
+            },
+            toggleNotifications() { Store.update({ showNotifications: !this.state.showNotifications }); },
+            markNotificationRead(id) { const newNotifs = this.state.notifications.map(n => n.id === id ? {...n, read: true} : n); Store.update({ notifications: newNotifs }); },
+            startQuiz(topicId) { 
+                const data = localizedText[Store.state.language].learningData;
+                let topic = null;
+                for(const cat of data) {
+                    topic = cat.topics.find(t => t.id === topicId);
+                    if(topic) break;
+                }
+                
+                if (!Store.state.profile.isRegistered) { Store.update({ page: 'auth', authRedirectTopic: topicId, authError: localizedText[Store.state.language].guestPrompt }); return; }
+                // Initialize answers with NULL so we can track progress
+                Store.update({ selectedTopicId: topicId, page: 'quiz', quizIndex: 0, quizAnswers: new Array(topic.quiz.length).fill(null), quizResult: null }); 
+            },
+            answerQuiz(idx) { 
+                const ans = [...(Store.state.quizAnswers||[])]; 
+                ans[Store.state.quizIndex] = idx; 
+                Store.update({ quizAnswers: ans }); 
+            },
+            nextQuestion() { Store.update({ quizIndex: Store.state.quizIndex + 1 }); },
+            prevQuestion() { Store.update({ quizIndex: Store.state.quizIndex - 1 }); },
+            submitQuiz() {
+                const s = Store.state; const data = localizedText[s.language].learningData;
+                const cat = data.find(c => c.id === s.selectedCategoryId);
+                const topic = cat.topics.find(t => t.id === s.selectedTopicId);
+                let scoreCount = 0; s.quizAnswers.forEach((ans, i) => { if (ans === topic.quiz[i].answer) scoreCount++; });
+                const score = Math.round((scoreCount / topic.quiz.length) * 100);
+                Store.updateProgress(topic.id, score, score >= 60, topic.categoryId);
+                Store.update({ quizResult: { score, passed: score >= 60 } });
+            },
+            restartQuiz() { 
+                const s = Store.state; const data = localizedText[s.language].learningData;
+                const cat = data.find(c => c.id === s.selectedCategoryId);
+                const topic = cat.topics.find(t => t.id === s.selectedTopicId);
+                Store.update({ quizIndex: 0, quizAnswers: new Array(topic.quiz.length).fill(null), quizResult: null }); 
+            },
+            toggleTextSize() {
+                const sizes = [1, 1.15, 1.3];
+                const currentIndex = sizes.indexOf(Store.state.fontScale);
+                const nextSize = sizes[(currentIndex + 1) % sizes.length];
+                document.documentElement.style.setProperty('--app-font-scale', nextSize);
+                Store.update({ fontScale: nextSize });
+            }
+        };
+
+        if (Store.state.darkMode) document.documentElement.classList.add('dark');
+
+        // FIXED: Using nullish coalescing operator to correctly handle falsy values like 0
+        function html(strings, ...values) { return strings.reduce((result, str, i) => result + str + (values[i] ?? ''), ''); }
+
+        function NotificationPanel() {
+            const s = Store.state; const t = localizedText[s.language];
+            if (!s.showNotifications) return '';
+            return html`
+                <div class="fixed inset-0 z-50 flex justify-end" onclick="app.toggleNotifications()">
+                    <div class="w-full max-w-sm h-full bg-white dark:bg-slate-800 shadow-2xl slide-in-right p-4 overflow-y-auto border-l dark:border-slate-700 backdrop-blur-xl bg-opacity-95" onclick="event.stopPropagation()">
+                         <div class="flex justify-between items-center mb-6">
+                            <h3 class="text-xl font-bold dark:text-white flex items-center gap-2"><i data-lucide="bell" width="20"></i> ${t.notifications.title}</h3>
+                            <button onclick="app.toggleNotifications()" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full"><i data-lucide="x" width="20"></i></button>
+                        </div>
+                        <div class="space-y-3">
+                            ${s.notifications.length === 0 ? html`<p class="text-slate-500 text-center py-10">${t.notifications.empty}</p>` : s.notifications.map(n => html`<div onclick="app.readNotif(${n.id})" class="p-4 rounded-xl border-l-4 transition-all hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer ${n.read ? 'border-slate-300 bg-white dark:bg-slate-800' : 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-900/20'}"><div class="flex justify-between items-start"><h4 class="font-bold text-sm text-slate-800 dark:text-white">${n.title}</h4><span class="text-[10px] text-slate-400 whitespace-nowrap ml-2">${n.time}</span></div><p class="text-xs text-slate-600 dark:text-slate-300 mt-1">${n.message}</p></div>`).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function Footer() {
+            return html`
+                <footer class="w-full py-6 mt-auto bg-white dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700 text-center">
+                    <div class="max-w-6xl mx-auto px-4">
+                        <p class="text-[10px] text-slate-400 uppercase tracking-widest font-bold mb-1">Developed By MG Interactive Solutions & Zeyotech.in</p>
+                        <p class="text-[10px] text-slate-500 dark:text-slate-400">Designed & Maintained By Mratunjay Pandey</p>
+                    </div>
+                </footer>
+            `;
+        }
+
+        function Header() {
+            const t = localizedText[Store.state.language];
+            const isDark = Store.state.darkMode;
+            const unreadCount = Store.state.notifications.filter(n => !n.read).length;
+            const p = Store.state.page;
+            const isGuest = !Store.state.profile.isRegistered;
+            const navLinks = [ { id: 'home', label: t.navHome, icon: 'home' }, { id: 'explore', label: t.navExplore, icon: 'layout-grid' }, { id: 'profile', label: t.navProgress, icon: 'user' }, { id: 'support', label: t.navHelp, icon: 'life-buoy' } ];
+
+            return html`
+                <header class="sticky top-0 z-40 glass border-b border-gray-100 dark:border-slate-800 px-6 py-4 flex justify-between items-center shadow-sm">
+                    <div class="flex items-center gap-3 cursor-pointer group" onclick="app.nav('home')">
+                        <div class="text-indigo-600 dark:text-indigo-400 p-1"><i data-lucide="layers" width="32"></i></div>
+                        <h1 class="font-extrabold text-2xl tracking-tighter text-slate-900 dark:text-white bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-indigo-800 dark:from-indigo-400 dark:to-indigo-200 uppercase">${t.appTitle}</h1>
+                    </div>
+                    <div class="hidden md:flex items-center gap-8">
+                        ${navLinks.map(link => html`
+                            <button onclick="app.nav('${link.id}')" class="text-sm font-semibold transition-all hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center gap-2 ${p === link.id || (link.id==='explore' && p==='category') ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400'}">
+                                ${link.label}
+                            </button>
+                        `).join('')}
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button onclick="app.nav('auth')" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition shadow-md shadow-indigo-500/20 ${!isGuest ? 'hidden' : ''}">${t.loginBtn}</button>
+                        <button onclick="app.toggleNotifications()" class="p-2.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition-colors relative"><i data-lucide="bell" width="20"></i>${unreadCount > 0 ? html`<span class="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border border-white dark:border-slate-900 animate-pulse"></span>` : ''}</button>
+                        <button onclick="app.toggleTheme()" class="p-2.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition-colors hidden sm:block"><i data-lucide="${isDark ? 'sun' : 'moon'}" width="20"></i></button>
+                        <button onclick="app.toggleLang()" class="p-2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs w-9 h-9 flex items-center justify-center shadow-sm hover:scale-105 transition-transform">${Store.state.language.toUpperCase()}</button>
+                    </div>
+                </header>
+            `;
+        }
+
+        function BottomNav() {
+            const t = localizedText[Store.state.language];
+            const p = Store.state.page;
+            const activeClass = "text-indigo-600 dark:text-indigo-400 scale-110 -translate-y-1";
+            const inactiveClass = "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300";
+            return html`
+                <nav class="md:hidden fixed bottom-0 left-0 right-0 glass border-t border-gray-100 dark:border-slate-800 flex justify-around p-3 z-30 pb-safe shadow-[0_-8px_30px_rgba(0,0,0,0.04)] w-full">
+                    <button onclick="app.nav('home')" class="p-2 flex flex-col items-center transition-all duration-300 ease-out ${p==='home' ? activeClass : inactiveClass}"><i data-lucide="home" width="24" stroke-width="${p==='home'? 2.5 : 2}"></i></button>
+                    <button onclick="app.nav('explore')" class="p-2 flex flex-col items-center transition-all duration-300 ease-out ${(p==='explore'||p==='category') ? activeClass : inactiveClass}"><i data-lucide="layout-grid" width="24" stroke-width="${(p==='explore'||p==='category')? 2.5 : 2}"></i></button>
+                    <button onclick="app.nav('profile')" class="p-2 flex flex-col items-center transition-all duration-300 ease-out ${p==='profile' ? activeClass : inactiveClass}"><i data-lucide="user" width="24" stroke-width="${p==='profile'? 2.5 : 2}"></i></button>
+                     <button onclick="app.nav('support')" class="p-2 flex flex-col items-center transition-all duration-300 ease-out ${p==='support' ? activeClass : inactiveClass}"><i data-lucide="life-buoy" width="24" stroke-width="${p==='support'? 2.5 : 2}"></i></button>
+                </nav>
+            `;
+        }
+
+        function AuthPage() {
+            const t = localizedText[Store.state.language];
+            const s = Store.state;
+            const isLogin = s.authMode === 'login';
+            const states = Object.keys(mockStateDistrictData).sort();
+            const districts = s.regState ? mockStateDistrictData[s.regState] : [];
+
+            return html`
+                <div class="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-900 p-4 relative w-full fade-in">
+                    <div class="absolute top-4 right-4">
+                         <button onclick="app.toggleLang()" class="p-2 bg-white dark:bg-slate-800 rounded-full shadow-md flex items-center gap-2 px-3 text-sm font-bold text-indigo-600 dark:text-indigo-400">
+                            <i data-lucide="globe" width="18"></i> ${s.language.toUpperCase()}
+                        </button>
+                    </div>
+
+                    <div class="w-full max-w-md bg-white dark:bg-slate-800 rounded-3xl shadow-2xl p-8 border border-gray-100 dark:border-slate-700 relative overflow-hidden">
+                        <div class="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-indigo-500 to-violet-500"></div>
+                        
+                        <div class="text-center mb-8">
+                            <div class="bg-indigo-50 dark:bg-indigo-900/30 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-inner transform rotate-3">
+                                <i data-lucide="lock" class="text-indigo-600 dark:text-indigo-400" width="32"></i>
+                            </div>
+                            <h2 class="text-2xl font-bold text-slate-800 dark:text-white">${isLogin ? t.loginTitle : t.registerTitle}</h2>
+                            <p class="text-slate-500 dark:text-slate-400 text-sm mt-2">${t.guestPrompt}</p>
+                        </div>
+
+                        ${s.authError ? html`<div class="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 text-red-600 text-sm rounded-xl flex items-start gap-3"><i data-lucide="alert-circle" width="18" class="mt-0.5 shrink-0"></i><span>${s.authError}</span></div>` : ''}
+
+                        <form onsubmit="event.preventDefault(); app.handleAuthSubmit(this);" class="space-y-5">
+                            ${!isLogin ? html`
+                                <div><label class="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide">Full Name</label><input type="text" name="name" class="w-full p-3.5 bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-xl dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none" required /></div>
+                                <div class="grid grid-cols-2 gap-4">
+                                     <div><label class="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide">${t.rural.state}</label><select name="state" onchange="app.setRegState(this.value)" class="w-full p-3.5 bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-xl dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none" required><option value="">Select</option>${states.map(st => html`<option value="${st}" ${s.regState===st ? 'selected':''}>${st}</option>`).join('')}</select></div>
+                                     <div><label class="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide">${t.rural.district}</label><select name="district" class="w-full p-3.5 bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-xl dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none" ${!s.regState ? 'disabled':''} required><option value="">Select</option>${districts.map(d => html`<option value="${d}">${d}</option>`).join('')}</select></div>
+                                </div>
+                                <div><label class="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide">${t.rural.village}</label><input type="text" name="village" class="w-full p-3.5 bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-xl dark:text-white outline-none" required /></div>
+                                <div><label class="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide">${t.rural.dob}</label><input type="date" name="dob" class="w-full p-3.5 bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-xl dark:text-white outline-none" required /></div>
+                            ` : ''}
+                            <div><label class="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide">${t.mobileLabel}</label><input type="text" name="mobile" class="w-full p-3.5 bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-xl dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none" required placeholder="Enter mobile number" /></div>
+                            <div><label class="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide">${t.passwordLabel}</label><input type="password" name="password" class="w-full p-3.5 bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-xl dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none" required placeholder="••••••••" /></div>
+                            ${!isLogin ? html`<div><label class="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide">Email (Optional)</label><input type="email" name="email" class="w-full p-3.5 bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-xl dark:text-white outline-none" placeholder="name@example.com" /></div>`:''}
+                            
+                            <button type="submit" ${s.authLoading ? 'disabled' : ''} class="w-full py-4 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-indigo-500/30 transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-70 disabled:cursor-not-allowed mt-2">
+                                ${s.authLoading ? html`<div class="flex items-center justify-center gap-2"><i data-lucide="loader" class="animate-spin" width="18"></i> Processing...</div>` : (isLogin ? t.loginBtn : t.registerBtn)}
+                            </button>
+                        </form>
+                        
+                        <div class="mt-8 pt-6 border-t dark:border-slate-700 text-center space-y-4">
+                            <button onclick="app.toggleAuthMode()" class="text-indigo-600 dark:text-indigo-400 font-bold hover:underline text-sm transition">
+                                ${isLogin ? 'Don\'t have an account? Register' : 'Already have an account? Login'}
+                            </button>
+                            <div class="block">
+                                <button onclick="app.guestLogin()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-medium text-xs transition">
+                                    <i data-lucide="arrow-left" width="12" class="inline mr-1"></i> Back to Guest Mode
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function CategoryCard(cat, progress, t) {
+            const completedCount = cat.topics.filter(top => progress[top.id]?.isCompleted).length;
+            const percent = (completedCount / cat.topics.length) * 100;
+            return html`
+                <div onclick="app.openCategory('${cat.id}')" class="group cursor-pointer relative overflow-hidden rounded-3xl p-6 text-white shadow-card hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-2 bg-gradient-to-br ${cat.color} flex flex-col justify-between h-52 border border-white/10">
+                    <div class="absolute -top-4 -right-4 p-8 opacity-20 group-hover:opacity-30 transition-opacity transform group-hover:scale-125 duration-700 rotate-12"><i data-lucide="${cat.icon}" width="140" height="140"></i></div>
+                    <div class="flex justify-between items-start z-10 relative"><div class="p-3.5 bg-white/20 backdrop-blur-md rounded-2xl shadow-inner border border-white/20"><i data-lucide="${cat.icon}" width="28"></i></div><div class="text-right"><p class="text-[10px] font-bold opacity-80 uppercase tracking-widest mb-1">${t.modules}</p><span class="text-2xl font-black tracking-tight">${completedCount}/${cat.topics.length}</span></div></div>
+                    <div class="z-10 relative"><h3 class="mt-4 text-2xl font-bold tracking-tight leading-snug text-white/95 group-hover:text-white transition-colors">${cat.name}</h3><div class="w-full bg-black/20 h-2 mt-4 rounded-full overflow-hidden backdrop-blur-sm"><div class="h-full bg-white/90 shadow-[0_0_10px_rgba(255,255,255,0.5)] transition-all duration-1000 ease-out" style="width: ${percent}%"></div></div></div>
+                </div>
+            `;
+        }
+
+        function HomePage() {
+            const t = localizedText[Store.state.language];
+            const data = t.learningData;
+            const user = Store.state.profile;
+            const progress = Store.state.progress;
+            const allTopics = data.flatMap(c => c.topics);
+            const completedCount = Object.values(progress).filter(p => p.isCompleted).length;
+            const progressPercent = Math.round((completedCount / allTopics.length) * 100) || 0;
+            const timeSpent = Utils.calculateLearningMinutes(progress);
+            const inProgress = allTopics.filter(topic => { const prog = progress[topic.id]; return prog && prog.attempts > 0 && !prog.isCompleted; });
+
+            return html`
+                <div class="max-w-7xl mx-auto w-full fade-in pb-24 px-4 sm:px-6 lg:px-8 pt-8 flex-grow">
+                    <div class="space-y-12">
+                        <header class="flex flex-col md:flex-row justify-between items-end pb-4 border-b border-slate-200 dark:border-slate-800 gap-4">
+                            <div class="text-center md:text-left w-full">
+                                <h1 class="text-3xl sm:text-5xl font-black text-slate-900 dark:text-white mb-2 tracking-tight">${t.welcomeTitle.replace('{{name}}', user.name || 'Learner')}</h1>
+                                <p class="text-slate-500 dark:text-slate-400 text-lg font-medium">${t.welcomeBody}</p>
+                            </div>
+                        </header>
+
+                        <!-- Stats Row -->
+                        <section class="grid grid-cols-2 md:grid-cols-3 gap-6">
+                            <div class="p-6 rounded-[2rem] shadow-sm text-white bg-gradient-to-br from-emerald-500 to-teal-600 relative overflow-hidden group hover:shadow-lg transition-all"><div class="absolute right-0 top-0 opacity-10 transform translate-x-4 -translate-y-4 group-hover:scale-110 transition-transform"><i data-lucide="check-circle" width="100" height="100"></i></div><div class="flex flex-col h-full justify-between z-10 relative"><span class="text-xs font-bold opacity-80 uppercase tracking-widest">Completed Modules</span><div class="text-5xl font-black mt-2 tracking-tight">${completedCount} <span class="text-lg font-bold opacity-60">/ ${allTopics.length}</span></div></div></div>
+                            <div class="p-6 rounded-[2rem] shadow-sm text-white bg-gradient-to-br from-blue-500 to-indigo-600 relative overflow-hidden group hover:shadow-lg transition-all"><div class="absolute right-0 top-0 opacity-10 transform translate-x-4 -translate-y-4 group-hover:scale-110 transition-transform"><i data-lucide="bar-chart-2" width="100" height="100"></i></div><div class="flex flex-col h-full justify-between z-10 relative"><span class="text-xs font-bold opacity-80 uppercase tracking-widest">Overall Progress</span><div class="text-5xl font-black mt-2 tracking-tight">${progressPercent}%</div></div></div>
+                            <div class="col-span-2 md:col-span-1 p-6 rounded-[2rem] shadow-sm text-white bg-gradient-to-br from-amber-400 to-orange-500 relative overflow-hidden group hover:shadow-lg transition-all"><div class="absolute right-0 top-0 opacity-10 transform translate-x-4 -translate-y-4 group-hover:scale-110 transition-transform"><i data-lucide="zap" width="100" height="100"></i></div><div class="flex flex-col h-full justify-between z-10 relative"><span class="text-xs font-bold opacity-80 uppercase tracking-widest">Learning Time</span><div class="text-5xl font-black mt-2 tracking-tight">${timeSpent}<span class="text-2xl font-bold ml-1">m</span></div></div></div>
+                        </section>
+
+                        ${inProgress.length > 0 ? html`
+                            <section>
+                                <div class="flex items-center gap-3 mb-6"><div class="bg-indigo-100 dark:bg-indigo-900/30 p-2 rounded-lg text-indigo-600 dark:text-indigo-400"><i data-lucide="play-circle" width="20"></i></div><h2 class="text-2xl font-bold text-slate-800 dark:text-slate-100">${t.continueLearning}</h2></div>
+                                <div class="flex gap-6 overflow-x-auto pb-6 snap-x no-scrollbar">
+                                    ${inProgress.map(topic => html`
+                                        <div class="min-w-[300px] bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 snap-start flex flex-col justify-between h-44 hover:border-indigo-500 dark:hover:border-indigo-500 transition-colors cursor-pointer group" onclick="app.openTopic('${topic.id}')"><div><span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">Resume</span><h3 class="font-bold text-slate-800 dark:text-white mb-2 text-xl leading-snug group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">${topic.name}</h3></div><div class="w-full bg-slate-100 dark:bg-slate-700 h-2 rounded-full overflow-hidden"><div class="bg-indigo-500 h-full w-1/2"></div></div></div>
+                                    `).join('')}
+                                </div>
+                            </section>
+                        ` : ''}
+
+                        <section>
+                            <div class="flex justify-between items-center mb-8"><div class="flex items-center gap-3"><div class="bg-violet-100 dark:bg-violet-900/30 p-2 rounded-lg text-violet-600 dark:text-violet-400"><i data-lucide="layers" width="20"></i></div><h2 class="text-2xl font-bold text-slate-800 dark:text-slate-100">${t.modules}</h2></div><button onclick="app.nav('explore')" class="text-indigo-600 dark:text-indigo-400 font-bold flex items-center hover:underline text-sm tracking-wide bg-indigo-50 dark:bg-indigo-900/20 px-5 py-2.5 rounded-full transition-colors hover:bg-indigo-100 dark:hover:bg-indigo-900/40">${t.navExplore} <i data-lucide="arrow-right" width="16" class="ml-2"></i></button></div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                                ${data.slice(0, 6).map(cat => CategoryCard(cat, progress, t)).join('')}
+                            </div>
+                        </section>
+                    </div>
+                </div>
+                ${Footer()}
+            `;
+        }
+
+        function ProfilePage() {
+            const t = localizedText[Store.state.language];
+            const p = Store.state.profile;
+            const progress = Store.state.progress;
+            const data = t.learningData;
+            
+            const totalAttempts = Object.values(progress).reduce((a, b) => a + (b.attempts || 0), 0);
+            const completedModules = Object.values(progress).filter(p => p.isCompleted).length;
+            const totalModules = data.flatMap(c => c.topics).length;
+            
+            const days = ['S','M','T','W','T','F','S'];
+            const streakData = [true, true, false, true, true, true, false]; 
+
+            // Calculate mastered skills
+            const masteredSkills = [];
+            data.forEach(cat => {
+                cat.topics.forEach(topic => {
+                    if(progress[topic.id]?.isCompleted) {
+                        masteredSkills.push({ name: topic.name, icon: cat.icon });
+                    }
+                });
+            });
+
+            return html`
+                <div class="max-w-5xl mx-auto w-full fade-in pb-24 px-4 pt-10 flex-grow">
+                    <div class="grid md:grid-cols-12 gap-8">
+                        <!-- Left Column: User Card -->
+                        <div class="md:col-span-5 lg:col-span-4 space-y-6">
+                             <div class="bg-white dark:bg-slate-800 p-8 rounded-[2rem] shadow-xl border border-slate-100 dark:border-slate-700 relative overflow-hidden text-center">
+                                <div class="w-32 h-32 bg-indigo-100 dark:bg-indigo-900/50 rounded-full flex items-center justify-center text-5xl font-black text-indigo-600 dark:text-indigo-400 mx-auto mb-6 shadow-inner">${p.name ? p.name[0].toUpperCase() : 'G'}</div>
+                                <h3 class="font-bold text-2xl mb-1 text-slate-900 dark:text-white">${p.name || 'Guest'}</h3>
+                                <p class="text-slate-500 text-xs font-mono mb-6 tracking-wider uppercase">${p.studentId || 'ID: NOT ASSIGNED'}</p>
+                                <span class="text-[10px] uppercase font-black px-4 py-1.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 tracking-widest">
+                                    ${p.isRegistered ? 'VERIFIED LEARNER' : 'GUEST ACCOUNT'}
+                                </span>
+                                
+                                ${p.isRegistered ? html`
+                                    <div class="mt-8 pt-8 border-t border-slate-100 dark:border-slate-700 text-left space-y-4">
+                                        <div><label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Email</label><div class="text-sm font-semibold text-slate-700 dark:text-slate-300 truncate">${p.email || 'N/A'}</div></div>
+                                        <div><label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Date of Birth</label><div class="text-sm font-semibold text-slate-700 dark:text-slate-300">${p.dob || 'N/A'}</div></div>
+                                        <div><label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Location</label><div class="text-sm font-semibold text-slate-700 dark:text-slate-300">${p.village || '-'}, ${p.district || '-'}</div></div>
+                                        <div><label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">State</label><div class="text-sm font-semibold text-slate-700 dark:text-slate-300">${p.state || '-'}</div></div>
+                                    </div>
+                                ` : html`<div class="mt-8 pt-8 border-t border-slate-100 dark:border-slate-700"><p class="text-sm text-slate-500">Register to save your profile details.</p></div>`}
+                            </div>
+                            
+                            <button onclick="app.logout()" class="w-full p-4 bg-white dark:bg-slate-800 text-red-500 font-bold rounded-2xl border border-red-100 dark:border-red-900/30 hover:bg-red-50 dark:hover:bg-red-900/10 transition flex items-center justify-center gap-2 shadow-sm"><i data-lucide="log-out" width="18"></i> ${t.profile.logout}</button>
+                        </div>
+
+                        <!-- Right Column: Stats & Skills -->
+                        <div class="md:col-span-7 lg:col-span-8 space-y-6">
+                            <!-- Detailed Stats -->
+                            <div class="grid sm:grid-cols-2 gap-6">
+                                <div class="bg-white dark:bg-slate-800 p-6 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-700 flex flex-col justify-between h-40">
+                                    <div class="flex items-start justify-between"><span class="text-xs font-bold text-slate-400 uppercase tracking-widest">Total Modules</span><i data-lucide="layers" class="text-indigo-500"></i></div>
+                                    <div class="text-5xl font-black text-slate-900 dark:text-white">${completedModules} <span class="text-lg text-slate-400 font-bold">/ ${totalModules}</span></div>
+                                </div>
+                                <div class="bg-white dark:bg-slate-800 p-6 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-700 flex flex-col justify-between h-40">
+                                    <div class="flex items-start justify-between"><span class="text-xs font-bold text-slate-400 uppercase tracking-widest">Current Streak</span><i data-lucide="flame" class="text-orange-500"></i></div>
+                                    <div class="text-5xl font-black text-slate-900 dark:text-white">3 <span class="text-lg text-slate-400 font-bold">Days</span></div>
+                                </div>
+                            </div>
+
+                            <!-- Skills Mastered (Replacing Certificates) -->
+                             <div class="bg-white dark:bg-slate-800 p-8 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-700">
+                                <h3 class="font-bold text-xl mb-6 dark:text-white flex items-center gap-2"><i data-lucide="award" width="24" class="text-amber-500"></i> Skills Mastered</h3>
+                                ${masteredSkills.length > 0 ? html`
+                                    <div class="flex flex-wrap gap-3">
+                                        ${masteredSkills.map(skill => html`
+                                            <div class="px-4 py-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-full text-sm font-bold border border-indigo-100 dark:border-indigo-800 flex items-center gap-2">
+                                                <i data-lucide="check-circle" width="14"></i> ${skill.name}
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                ` : html`<div class="p-8 text-center text-slate-400 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700">Complete modules to unlock skill badges.</div>`}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                ${Footer()}
+            `;
+        }
+
+        function ExplorePage() {
+            const t = localizedText[Store.state.language];
+            const data = t.learningData;
+            return html`
+                <div class="max-w-6xl mx-auto w-full fade-in pb-24 px-4 sm:px-6 lg:px-8 pt-8 flex-grow">
+                    <h2 class="text-3xl font-black text-slate-900 dark:text-white mb-8 flex items-center gap-3"><i data-lucide="layout-grid" class="text-indigo-600" width="32"></i> ${t.navExplore}</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                        ${data.map(cat => CategoryCard(cat, Store.state.progress, t)).join('')}
+                    </div>
+                </div>
+                ${Footer()}
+            `;
+        }
+
+        function CategoryDetailsPage() {
+            const t = localizedText[Store.state.language];
+            const data = t.learningData;
+            const cat = data.find(c => c.id === Store.state.selectedCategoryId);
+            const progress = Store.state.progress;
+            if(!cat) return app.nav('explore');
+
+            return html`
+                <div class="max-w-4xl mx-auto w-full fade-in pb-24 px-4 pt-8 flex-grow">
+                    <button onclick="app.nav('explore')" class="mb-8 flex items-center text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition font-bold text-sm bg-white dark:bg-slate-800 px-4 py-2 rounded-full shadow-sm border border-slate-200 dark:border-slate-700"><i data-lucide="arrow-left" width="16" class="mr-2"></i> Back to Explore</button>
+                    
+                    <div class="flex flex-col md:flex-row items-center gap-6 mb-10 p-8 bg-gradient-to-r from-slate-900 to-slate-800 rounded-3xl text-white shadow-2xl relative overflow-hidden">
+                        <div class="absolute right-0 top-0 opacity-10 transform translate-x-12 -translate-y-12"><i data-lucide="${cat.icon}" width="300" height="300"></i></div>
+                        <div class="p-6 bg-white/10 backdrop-blur-md rounded-3xl shadow-inner border border-white/10 relative z-10"><i data-lucide="${cat.icon}" width="48"></i></div>
+                        <div class="relative z-10 text-center md:text-left">
+                            <h2 class="text-4xl font-black tracking-tight mb-2">${cat.name}</h2>
+                            <p class="text-slate-300 font-medium text-lg flex items-center justify-center md:justify-start gap-2"><i data-lucide="book" width="18"></i> ${cat.topics.length} Modules Available</p>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        ${cat.topics.map((topic, i) => {
+                            const isDone = progress[topic.id]?.isCompleted;
+                            return html`
+                                <div onclick="app.openTopic('${topic.id}')" class="group flex items-center p-6 bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700 hover:shadow-lg hover:border-indigo-200 dark:hover:border-indigo-900 transition-all duration-300 cursor-pointer transform hover:-translate-y-1">
+                                    <div class="mr-6 font-black text-3xl text-slate-200 dark:text-slate-700">0${i+1}</div>
+                                    <div class="flex-1 pr-4">
+                                        <div class="flex items-center gap-3 mb-2">
+                                            <h3 class="font-bold text-xl text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">${topic.name}</h3>
+                                            ${isDone ? html`<span class="px-2 py-0.5 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px] font-bold uppercase rounded-full tracking-wider flex items-center gap-1"><i data-lucide="check" width="10"></i> Done</span>` : ''}
+                                        </div>
+                                        <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed max-w-lg">${topic.description}</p>
+                                    </div>
+                                    <button class="flex-shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center transition-all shadow-md ${isDone ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400' : 'bg-indigo-600 text-white shadow-indigo-500/30 group-hover:scale-110 group-hover:rotate-3'}">
+                                        <i data-lucide="${isDone ? 'rotate-cw' : 'play'}" width="20" class="${!isDone && 'ml-1'}"></i>
+                                    </button>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+                ${Footer()}
+            `;
+        }
+
+        function TopicPage() {
+            const t = localizedText[Store.state.language];
+            const data = t.learningData;
+            const cat = data.find(c => c.id === Store.state.selectedCategoryId);
+            const topic = cat?.topics.find(top => top.id === Store.state.selectedTopicId);
+            const progress = Store.state.progress;
+            const isDone = progress[topic?.id]?.isCompleted;
+            const isGuest = !Store.state.profile.isRegistered;
+            
+            if(!topic) return app.nav('home');
+
+            return html`
+                <div class="max-w-5xl mx-auto w-full fade-in pb-24 px-4 pt-8 flex-grow">
+                    <button onclick="app.nav('category')" class="mb-6 flex items-center text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white font-bold text-sm transition"><i data-lucide="arrow-left" width="18" class="mr-1"></i> ${t.backToTopic}</button>
+                    <div class="grid lg:grid-cols-3 gap-10">
+                        <div class="lg:col-span-2">
+                            <span class="text-indigo-600 dark:text-indigo-400 font-bold tracking-wide uppercase text-xs mb-2 block">${cat.name}</span>
+                            <h1 class="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white mb-4 leading-tight">${topic.name}</h1>
+                            <p class="text-slate-600 dark:text-slate-300 mb-8 text-lg leading-relaxed">${topic.description}</p>
+                            
+                            <div class="aspect-video bg-slate-900 rounded-3xl overflow-hidden mb-8 shadow-2xl ring-1 ring-black/5 dark:ring-white/10 relative group">
+                                <iframe width="100%" height="100%" src="${Utils.getEmbedUrl(topic.videoUrl)}" title="${topic.name}" frameBorder="0" allowFullScreen class="w-full h-full relative z-10"></iframe>
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-6">
+                            <div class="bg-white dark:bg-slate-800 p-8 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-lg sticky top-28">
+                                <h3 class="font-bold text-xl mb-6 dark:text-white flex items-center gap-2"><i data-lucide="zap" class="text-amber-500" width="20"></i> Next Steps</h3>
+                                
+                                ${topic.simulation ? html`
+                                    <button onclick="app.nav('simulation')" class="w-full mb-4 p-4 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 rounded-2xl font-bold flex justify-center items-center gap-3 transition hover:bg-amber-100 dark:hover:bg-amber-900/20 group">
+                                        <div class="bg-amber-100 dark:bg-amber-800 p-2 rounded-lg group-hover:scale-110 transition-transform"><i data-lucide="smartphone" width="20"></i></div> 
+                                        <span>Practice Simulation</span>
+                                    </button>
+                                ` : ''}
+                                
+                                <button onclick="app.startQuiz('${topic.id}')" class="w-full p-5 text-white rounded-2xl font-bold shadow-xl flex justify-center items-center gap-3 transition transform hover:scale-[1.02] active:scale-[0.98] ${isDone ? 'bg-gradient-to-r from-emerald-500 to-emerald-700 shadow-emerald-500/30' : 'bg-gradient-to-r from-indigo-600 to-purple-600 shadow-indigo-500/30'}">
+                                    <i data-lucide="${isDone ? 'rotate-cw' : 'play-circle'}" width="24"></i> 
+                                    <span class="text-lg">${isDone ? t.quiz.reattempt : t.startLearn}</span>
+                                </button>
+
+                                ${isGuest ? html`
+                                    <div class="mt-6 p-4 bg-slate-50 dark:bg-slate-700/30 rounded-xl border border-slate-100 dark:border-slate-700 text-center">
+                                        <p class="text-xs text-slate-500 dark:text-slate-400 mb-2"><i data-lucide="lock" width="12" class="inline mr-1"></i> Login required for Quiz</p>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                ${Footer()}
+            `;
+        }
+
+        function SimulationPage() {
+            return html`
+                 <div class="p-6 max-w-md mx-auto text-center h-[80vh] flex flex-col justify-center items-center fade-in">
+                    <div class="bg-indigo-50 dark:bg-indigo-900/30 p-8 rounded-full mb-8 animate-bounce border border-indigo-100 dark:border-indigo-800"><i data-lucide="clock" width="64" class="text-indigo-600 dark:text-indigo-400"></i></div>
+                    <h2 class="text-3xl font-black mb-4 dark:text-white tracking-tight">Coming Soon</h2>
+                    <p class="text-slate-600 dark:text-slate-300 mb-8 max-w-xs leading-relaxed text-lg">We are building an interactive simulation for this module. Stay tuned!</p>
+                    <button onclick="app.nav('topic')" class="w-full max-w-xs py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-bold shadow-lg hover:shadow-xl transition transform hover:-translate-y-1">Back to Topic</button>
+                </div>
+            `;
+        }
+
+        function QuizPage() {
+            const s = Store.state;
+            const t = localizedText[s.language];
+            const data = t.learningData;
+            const cat = data.find(c => c.id === s.selectedCategoryId);
+            const topic = cat?.topics.find(top => top.id === s.selectedTopicId);
+            
+            if(!topic) return app.nav('home');
+
+            if(s.quizResult) {
+                if(s.quizResult.passed) setTimeout(Utils.fireConfetti, 100);
+                return html`
+                    <div class="max-w-lg mx-auto w-full flex-grow flex flex-col justify-center fade-in p-8 text-center">
+                         <div class="w-32 h-32 mx-auto rounded-full flex items-center justify-center mb-8 shadow-2xl ${s.quizResult.passed ? 'bg-gradient-to-br from-emerald-400 to-green-600 text-white' : 'bg-gradient-to-br from-red-400 to-rose-600 text-white'} transform scale-110"><i data-lucide="${s.quizResult.passed ? 'trophy' : 'frown'}" width="64"></i></div>
+                        <h2 class="text-4xl font-black mb-2 dark:text-white tracking-tight">${s.quizResult.passed ? t.quiz.passed : t.quiz.failed}</h2>
+                        <p class="text-2xl font-bold mb-10 ${s.quizResult.passed ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}">${t.quiz.score.replace('{{score}}', s.quizResult.score)}</p>
+                        <div class="space-y-4 w-full">
+                            <button onclick="app.nav('topic')" class="w-full py-4 bg-slate-100 hover:bg-slate-200 text-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-white rounded-2xl font-bold transition text-lg">${t.backToTopic}</button>
+                            <button onclick="app.restartQuiz()" class="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold shadow-xl shadow-indigo-500/20 transition text-lg transform hover:-translate-y-1">${t.quiz.reattempt}</button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            const q = topic.quiz[s.quizIndex];
+            const answer = s.quizAnswers[s.quizIndex];
+
+            return html`
+                 <div class="max-w-2xl mx-auto w-full fade-in pb-24 px-4 pt-10 flex-grow">
+                    <div class="flex justify-between items-end mb-6">
+                        <div>
+                            <span class="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest block mb-2">${t.quiz.assessment}</span>
+                            <span class="text-sm font-bold text-slate-400">Question ${s.quizIndex+1} of ${topic.quiz.length}</span>
+                        </div>
+                        <span class="text-xl font-black text-slate-200 dark:text-slate-700">Q${s.quizIndex+1}</span>
+                    </div>
+                    
+                    <div class="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full mb-10 overflow-hidden"><div class="bg-indigo-600 h-full transition-all duration-500 ease-out" style="width: ${((s.quizIndex + 1)/topic.quiz.length)*100}%"></div></div>
+                    
+                    <div class="bg-white dark:bg-slate-800 p-8 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-700 mb-8 relative">
+                        <p class="text-xl font-bold mb-8 dark:text-white leading-relaxed">${q.question}</p>
+                        <div class="space-y-4">
+                            ${q.options.map((opt, i) => html`
+                                <button onclick="app.answerQuiz(${i})" class="w-full p-5 text-left rounded-2xl border-2 transition-all duration-200 flex items-center gap-4 group quiz-opt ${answer === i ? 'bg-indigo-50 border-indigo-600 text-indigo-800 dark:bg-indigo-900/30 dark:border-indigo-500 dark:text-indigo-100 shadow-md ring-2 ring-indigo-500/20' : 'border-slate-100 hover:border-indigo-300 dark:border-slate-700 dark:hover:border-slate-500 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50'}">
+                                    <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${answer === i ? 'border-indigo-600 dark:border-indigo-400 bg-indigo-600 dark:bg-indigo-400' : 'border-slate-300 dark:border-slate-500 group-hover:border-indigo-400'}">
+                                        ${answer === i ? html`<i data-lucide="check" width="14" class="text-white"></i>` : ''}
+                                    </div>
+                                    <span class="font-semibold text-lg">${opt}</span>
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-between mt-8">
+                         <button ${s.quizIndex === 0 ? 'disabled' : ''} onclick="app.prevQuestion()" class="px-6 py-3 text-slate-500 hover:text-slate-800 dark:hover:text-white disabled:opacity-30 rounded-xl font-bold transition flex items-center gap-2"><i data-lucide="arrow-left" width="18"></i> ${t.quiz.previous}</button>
+                         
+                         ${s.quizIndex === topic.quiz.length - 1 ? 
+                            html`<button ${answer === undefined || answer === null ? 'disabled' : ''} onclick="app.submitQuiz()" class="px-10 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold disabled:opacity-50 disabled:cursor-not-allowed transition shadow-lg shadow-emerald-500/20 transform active:scale-95 flex items-center gap-2">${t.quiz.submit} <i data-lucide="check-circle" width="18"></i></button>` : 
+                            html`<button ${answer === undefined || answer === null ? 'disabled' : ''} onclick="app.nextQuestion()" class="px-10 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold disabled:opacity-50 disabled:cursor-not-allowed transition shadow-lg shadow-indigo-500/20 transform active:scale-95 flex items-center gap-2">${t.quiz.next} <i data-lucide="arrow-right" width="18"></i></button>`
+                         }
+                    </div>
+                 </div>
+            `;
+        }
+
+        function SupportPage() {
+            const t = localizedText[Store.state.language];
+            return html`
+                <div class="max-w-3xl mx-auto w-full fade-in pb-24 px-4 pt-8 flex-grow">
+                    <h2 class="text-3xl font-black mb-8 dark:text-white flex items-center gap-3"><i data-lucide="life-buoy" class="text-indigo-500" width="32"></i> ${t.support.title}</h2>
+                    
+                    <div class="grid md:grid-cols-2 gap-5 mb-10">
+                         <a href="tel:18001234567" class="p-8 bg-white dark:bg-slate-800 rounded-3xl shadow-soft border border-slate-100 dark:border-slate-700 flex flex-col items-center justify-center hover:shadow-xl transition group transform hover:-translate-y-1">
+                            <div class="bg-emerald-100 dark:bg-emerald-900/30 p-5 rounded-2xl mb-4 group-hover:scale-110 transition-transform"><i data-lucide="phone" class="text-emerald-600 dark:text-emerald-400" width="32"></i></div>
+                            <span class="font-bold text-lg text-slate-800 dark:text-white">Call Helpline</span><span class="text-sm font-medium text-slate-400 mt-1">1800-123-4567</span>
+                        </a>
+                        <a href="mailto:help@ds.org" class="p-8 bg-white dark:bg-slate-800 rounded-3xl shadow-soft border border-slate-100 dark:border-slate-700 flex flex-col items-center justify-center hover:shadow-xl transition group transform hover:-translate-y-1">
+                            <div class="bg-blue-100 dark:bg-blue-900/30 p-5 rounded-2xl mb-4 group-hover:scale-110 transition-transform"><i data-lucide="mail" class="text-blue-600 dark:text-blue-400" width="32"></i></div>
+                            <span class="font-bold text-lg text-slate-800 dark:text-white">Email Support</span><span class="text-sm font-medium text-slate-400 mt-1">help@ds.org</span>
+                        </a>
+                    </div>
+
+                    <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden">
+                        <div class="p-6 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-700/20"><h3 class="font-bold text-lg dark:text-white">${t.support.faqTitle}</h3></div>
+                        <div>
+                            ${FAQ_DATA.map(f => html`
+                                <details class="group border-b border-slate-50 dark:border-slate-700/50 last:border-0">
+                                    <summary class="flex justify-between items-center font-bold cursor-pointer list-none p-6 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
+                                        <span>${f.q}</span>
+                                        <span class="bg-slate-100 dark:bg-slate-700 p-1 rounded-full transition group-open:rotate-180"><i data-lucide="chevron-down" width="16"></i></span>
+                                    </summary>
+                                    <div class="text-slate-600 dark:text-slate-400 px-6 pb-6 text-sm leading-relaxed border-t border-dashed border-slate-100 dark:border-slate-700/50 pt-4 bg-slate-50/30 dark:bg-slate-800/30">${f.a}</div>
+                                </details>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+                ${Footer()}
+            `;
+        }
+
+        // --- 6. APP CONTROLLER ---
+        const app = {
+            render() {
+                const s = Store.state;
+                const container = document.getElementById('app');
+                const overlay = document.getElementById('overlay-layer');
+                
+                overlay.innerHTML = NotificationPanel(); 
+
+                if (s.page === 'auth') {
+                    container.innerHTML = AuthPage();
+                } else {
+                    container.innerHTML = `
+                        ${Header()}
+                        <main class="flex-grow flex flex-col">
+                            ${s.page === 'home' ? HomePage() : ''}
+                            ${s.page === 'explore' ? ExplorePage() : ''}
+                            ${s.page === 'category' ? CategoryDetailsPage() : ''}
+                            ${s.page === 'topic' ? TopicPage() : ''}
+                            ${s.page === 'quiz' ? QuizPage() : ''}
+                            ${s.page === 'profile' ? ProfilePage() : ''}
+                            ${s.page === 'support' ? SupportPage() : ''}
+                            ${s.page === 'simulation' ? SimulationPage() : ''}
+                        </main>
+                        ${BottomNav()}
+                    `;
+                }
+                lucide.createIcons();
+            },
+            nav(page) { Store.update({ page, quizResult: null, quizAnswers: [] }); window.scrollTo(0,0); },
+            openCategory(id) { Store.update({ selectedCategoryId: id, page: 'category' }); },
+            openTopic(id) { let catId = null; const data = localizedText[Store.state.language].learningData; for(const c of data) { if(c.topics.find(t => t.id === id)) { catId = c.id; break; } } Store.update({ selectedCategoryId: catId, selectedTopicId: id, page: 'topic' }); },
+            toggleAuthMode() { Store.update({ authMode: Store.state.authMode === 'login' ? 'register' : 'login' }); },
+            setRegState(val) { Store.update({ regState: val }); },
+            handleAuthSubmit(form) { const fd = new FormData(form); if (Store.state.authMode === 'login') Store.login(fd.get('mobile'), fd.get('password')); else Store.register(fd); },
+            guestLogin() { Store.update({ page: 'home', authError: '' }); },
+            logout() { Store.logout(); },
+            toggleTheme() { Store.update({ darkMode: !Store.state.darkMode }); },
+            toggleLang() { Store.update({ language: Store.state.language === 'en' ? 'hi' : 'en' }); },
+            toggleNotifications() { Store.toggleNotifications(); },
+            readNotif(id) { Store.markNotificationRead(id); },
+            startQuiz(topicId) { 
+                const data = localizedText[Store.state.language].learningData;
+                let topic = null;
+                for(const cat of data) {
+                    topic = cat.topics.find(t => t.id === topicId);
+                    if(topic) break;
+                }
+                
+                if (!Store.state.profile.isRegistered) { Store.update({ page: 'auth', authRedirectTopic: topicId, authError: localizedText[Store.state.language].guestPrompt }); return; }
+                Store.update({ selectedTopicId: topicId, page: 'quiz', quizIndex: 0, quizAnswers: new Array(topic.quiz.length).fill(null), quizResult: null }); 
+            },
+            answerQuiz(idx) { 
+                const ans = [...(Store.state.quizAnswers||[])]; 
+                ans[Store.state.quizIndex] = idx; 
+                Store.update({ quizAnswers: ans }); 
+            },
+            nextQuestion() { Store.update({ quizIndex: Store.state.quizIndex + 1 }); },
+            prevQuestion() { Store.update({ quizIndex: Store.state.quizIndex - 1 }); },
+            submitQuiz() {
+                const s = Store.state; const data = localizedText[s.language].learningData;
+                const cat = data.find(c => c.id === s.selectedCategoryId);
+                const topic = cat.topics.find(t => t.id === s.selectedTopicId);
+                let scoreCount = 0; s.quizAnswers.forEach((ans, i) => { if (ans === topic.quiz[i].answer) scoreCount++; });
+                const score = Math.round((scoreCount / topic.quiz.length) * 100);
+                Store.updateProgress(topic.id, score, score >= 60, topic.categoryId);
+                Store.update({ quizResult: { score, passed: score >= 60 } });
+            },
+            restartQuiz() { 
+                const s = Store.state; const data = localizedText[s.language].learningData;
+                const cat = data.find(c => c.id === s.selectedCategoryId);
+                const topic = cat.topics.find(t => t.id === s.selectedTopicId);
+                Store.update({ quizIndex: 0, quizAnswers: new Array(topic.quiz.length).fill(null), quizResult: null }); 
+            },
+            toggleTextSize() {
+                const sizes = [1, 1.15, 1.3];
+                const currentIndex = sizes.indexOf(Store.state.fontScale);
+                const nextSize = sizes[(currentIndex + 1) % sizes.length];
+                document.documentElement.style.setProperty('--app-font-scale', nextSize);
+                Store.update({ fontScale: nextSize });
+            }
+        };
+
+        Store.init();
+        Store.subscribe(app.render);
+        app.render(); 
+        window.app = app;
+    </script>
+</body>
+</html>
